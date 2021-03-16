@@ -1,0 +1,57 @@
+{
+  "name": "pdf-reader",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@testing-library/jest-dom": "^5.11.4",
+    "@testing-library/react": "^11.1.0",
+    "@testing-library/user-event": "^12.1.10",
+    "react": "^17.0.1",
+    "react-dom": "^17.0.1",
+    "react-h5-audio-player": "^3.6.1",
+    "react-pdf": "^5.2.0",
+    "react-scripts": "4.0.3",
+    "web-vitals": "^1.0.1"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "serve": "yarn build; serve -s build"
+  },
+  "author": {
+    "name": "PN Hiremath",
+    "email": "pnhiremath18@gmail.com"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.5.5",
+    "@babel/plugin-proposal-class-properties": "^7.5.5",
+    "@babel/plugin-transform-runtime": "^7.5.5",
+    "@babel/preset-env": "^7.5.5",
+    "@babel/preset-react": "^7.0.0",
+    "@pmmmwh/react-refresh-webpack-plugin": "^0.4.1",
+    "copy-webpack-plugin": "^7.0.0",
+    "css-loader": "^4.3.0",
+    "html-webpack-plugin": "^5.1.0",
+    "less": "^3.12.0",
+    "less-loader": "^7.0.0",
+    "mini-css-extract-plugin": "^0.11.0",
+    "react-refresh": "^0.8.3",
+    "style-loader": "^1.2.0",
+    "webpack-cli": "^4.2.0",
+    "worker-loader": "^3.0.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
