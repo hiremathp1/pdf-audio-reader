@@ -62,3 +62,17 @@ label
   margin-top: 5px;
   margin-left: 1px;
 }
+.rightArrow {
+  transform: rotate(180deg)
+}
+
+svg {
+  color: #868686;
+}
+
+
+.center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}

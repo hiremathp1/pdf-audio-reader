@@ -13,7 +13,7 @@
 - [x] Scroll page with search (This is also used on text transcription highlight)
 
 ## Optimizations
-- [ ] Word highlight changing lag?
+- [x] Word highlight changing lag?
 
 # PDF Reader
 
@@ -41,6 +41,11 @@ Example:
 ```
 http://your.project.com:3000/?audio=http://10.42.0.1:8000/colibosco.mp3&text=http://10.42.0.1:8000/colibosco.txt&pdf=http://10.42.0.1:8000/colibosco.pdf
 ```
+An optional value offset may also be passed and needed in case the text layer
+is not aligned with the pdf canvas. To use this add a `?offset=x,y` to the url
+replacing x and y with integers representing the margin-left and margin-top on
+this order. This will simply be applied to the `react-pdf__Page__textContent`
+class.
 
 ## Getting Started with Create React App
 
@@ -67,6 +72,11 @@ The build is minified and the filenames include the hashes.\
 Your app is ready to be deployed!
 
 See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+
+#### `yarn serve`
+
+This will build and serve the optimized build on port 5000. You may want to
+install serve first with `npm install -g serve`.
 
 #### `yarn eject`
 
