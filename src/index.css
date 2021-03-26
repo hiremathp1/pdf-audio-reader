@@ -59,8 +59,6 @@ label
   z-index: 0;
 }
 .react-pdf__Page__textContent {
-  margin-top: 5px;
-  margin-left: 1px;
 }
 .rightArrow {
   transform: rotate(180deg)
@@ -75,4 +73,14 @@ svg {
     display: flex;
     justify-content: center;
     align-items: center;
+}
+
+.rhap_progress-section
+{
+  display: none;
+}
+
+.rhap_stacked .rhap_controls-section
+{
+  margin-top: 0;
 }

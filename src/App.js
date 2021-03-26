@@ -1,4 +1,4 @@
-import React, {useEffect, useLayoutEffect, createRef, useRef, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useLayoutEffect, createRef, useRef, useMemo, useState} from 'react';
 import {Document, Page, pdfjs} from 'react-pdf';
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
@@ -9,22 +9,26 @@ import 'react-h5-audio-player/lib/styles.css';
 import './index.css';
 
 // Example fallback. You might want to change to an error pdf or something 
-import IpdfFile from './examples/colibosco.pdf';
-import Iaudio from './examples/colibosco.mp3';
-import Itranscript from './examples/colibosco.txt';
+//import IpdfFile from './examples/colibosco.pdf';
+//import Iaudio from './examples/colibosco.mp3';
+//import Itranscript from './examples/colibosco.txt';
+import IpdfFile from './examples/AnansiandthePotofBeans.pdf';
+import Iaudio from './examples/anansi_and_the_pot_of_beans.wav';
+import Itranscript from './examples/anasi_and_the_pot_of_beans.txt';
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Adjustments
 const LISTEN_INTERVAL = 50; // ms, Highlight update interval. Too low might cause high cpu usage.
 const MIN_SIMILARITY = .8; // Set to 1 to only accept exact matches. 
 const WORD_THRESHOLD = 30; // ms
-const FORCE_ALL_WORDS_HIGHLIGHT = 1; // Forces all the words to be highlithed, but might increase latency
+const FORCE_ALL_WORDS_HIGHLIGHT = 0; // Forces all the words to be highlithed, but might increase latency
 const MAX_DISTANCE = 2; // Do not allow more than MAX_DISTANCE words to delay if above is true
 const MAX_DELAY_BETWEEN_WORDS = 200; // ms, If 2 words are closer than this they will both be highlighted
 const PLAYER_STEP_SIZE = 2; // Seconds to skip on the player controls or using arrow keys
 const MAX_PLAYER_SPEED_MULTIPLIER = 2; // How fast should it go (playback speed)
 const PLAYER_SPEED_STEP = .25; // Steps to increase or decrese by (playback speed)
-
+var PAGE_WIDTH = .5 // % of page to occupy. This is the default value if no width is passed to the url
+const SCROLL_TO_PAGE = true; // if false will scroll to highlighted word on line change
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -43,10 +47,18 @@ function clamp(number) {
 }
 
 function scrollToHighlight() {
+  //// Scroll to highlight
   const el = document.getElementsByClassName('wordHighlight')[0]
   if (el === undefined)
     return;
   el.scrollIntoView({behavior: 'smooth', block: 'center'})
+}
+
+function scrollToPage(n){
+  //// Scroll to page
+  const el=document.getElementsByClassName("react-pdf__Page")[n]
+  if(el)
+    el.scrollIntoView({behavior: 'smooth', block: 'center'})
 }
 
 function getQueryParams() {
@@ -62,13 +74,12 @@ function App() {
   const [transcript, setTranscript] = useState('');
 
   const [numPages, setNumPages] = useState(null);
-  const [transcriptIndex, setTranscriptIndex] = useState(0);
-  const [lastLine, setLastLine] = useState({page: 0, line: 0});
+  const [transcriptIndex, setTranscriptIndex] = useState(-1);
+  const [lastPos, setLastPos] = useState({page: 0, line: 0});
   const [pagesRendered, setPagesRendered] = useState(0);
   const [transcriptedText, setTranscriptedText] = useState([]);
 
   const [playerSpeed, setPlayerSpeed] = useState(1);
-  const [atTwoWords, setAtTwoWords] = useState(false);
 
   const [size, setSize] = useState({
     x: window.innerWidth,
@@ -120,8 +131,27 @@ function App() {
         elm.style.marginTop = y + "px";
       });
     }
+    if (urlParams.width) {
+      const width = Number(urlParams.width);
+      if(isNaN(width))
+        console.err(`Width parameter is not numeric: width=${urlParams.width}`);
+      else{
+        PAGE_WIDTH = urlParams.width/100;
+        const top = document.getElementsByClassName("top")[0]
+        top.style.width = urlParams+"%"
+      }
+    };
 
-    const transcriptList = (await (await fetch(transcript)).text()).split('\n').map(line => JSON.parse(line));
+    let fileLen = 0;
+    const transcriptList = (await (await fetch(transcript)).text()).split('\n').map((line, index) => {
+      fileLen++;
+      try{
+        return JSON.parse(line);
+      }catch{
+        console.error(`Json parse error at line number ${index}: ${line} `)
+        return undefined;
+      }
+    });
     let tempTranscriptedText = [];
 
     // Text preprocessing once on change page number
@@ -138,8 +168,8 @@ function App() {
         for (const line of Array.from(pages[page_index].getElementsByTagName("span")).slice(last_line_index)) {
           for (const w of line.textContent.split(" ").slice(last_word_index)) {
             // Compare words ignoring special characters, case and thresholding similarity
-            if (stringSimilarity.compareTwoStrings(simplifyString(word.value), simplifyString(w)) >= MIN_SIMILARITY) {
-              tempTranscriptedText.push({time: word.time, value: w, line_index, page_index, word_index, line: line});
+            if (word && stringSimilarity.compareTwoStrings(simplifyString(word.value), simplifyString(w)) >= MIN_SIMILARITY) {
+              tempTranscriptedText.push({time: word.time, value: w, line_index, page_index, word_index});
               last_word_index++;
               word_index++;
               // Once a word is found, nothing behind it will be matched, only forward
@@ -158,18 +188,21 @@ function App() {
       }
       last_page_index++;
     }
-    // The goal is to have an array like: [{time:, value:, page_index:, line_index:, word_index:, line:} ,... ]
-    // console.log(tempTranscriptedText);
+    // The goal is to have an array like: [{time:, value:, page_index:, line_index:, word_index:, } ,... ]
+    if(fileLen !== tempTranscriptedText.length){
+      console.error(`Some words weren't matched on the transcript`);
+      console.log(transcriptedText)
+    }
     if (tempTranscriptedText.length > 0) {
       setTranscriptedText(tempTranscriptedText);
       setTranscriptIndex(0);
-      scrollToHighlight()
+      //scrollToHighlight()
     }
   }, [pagesRendered]);
 
 
   // Scroll when line changes
-  useEffect(() => scrollToHighlight(), [lastLine]);
+  useEffect(() => SCROLL_TO_PAGE ? scrollToPage(lastPos.page) : scrollToHighlight(), [lastPos]);
 
   // Player functions 
   function getPlayerTime() {
@@ -177,8 +210,9 @@ function App() {
   }
 
   function setPlayerTime(time) {
-    if (audioPlayer?.current?.audio === undefined) return;
-    audioPlayer.current.audio.current.currentTime = time;
+    const audio = document.getElementsByTagName("audio")[0]
+    if (audio === undefined || isNaN(time)) return;
+    audio.currentTime = time;
   }
 
   function onAudioUpdate(e, reset = true) {
@@ -191,7 +225,7 @@ function App() {
       transcriptedText.every((wordItem, index) => {
         if (wordItem.time >= time * 1000 - WORD_THRESHOLD) {
           // Update index and highlight and break out of loop
-          setTranscriptIndex(index);
+          if(index !== transcriptIndex) setTranscriptIndex(index);
           return false;
         }
         return true;
@@ -199,17 +233,24 @@ function App() {
       // Enforce highlighting all words
     } else if (transcriptedText[transcriptIndex + 1].time - WORD_THRESHOLD <= time * 1000) {
       if (transcriptedText[transcriptIndex + MAX_DISTANCE].time <= time * 1000) {
-        setTranscriptIndex(transcriptIndex + MAX_DISTANCE);
+        if(transcriptIndex + MAX_DISTANCE !== transcriptIndex) setTranscriptIndex(transcriptIndex + MAX_DISTANCE);
       }
       else
-        setTranscriptIndex(transcriptIndex + 1);
+        if(transcriptIndex + 1 !== transcriptIndex) setTranscriptIndex(transcriptIndex + 1);
     }
 
     //Scroll if line changed
     const wordItem = transcriptedText[transcriptIndex];
     if (wordItem) {
-      if (lastLine !== {page: wordItem.page_index, line: wordItem.line_index})
-        setLastLine({page: wordItem.page_index, line: wordItem.line_index});
+      if(SCROLL_TO_PAGE){
+        //// Sroll on page change:
+        if (lastPos.page !== wordItem.page_index)
+          setLastPos({page: wordItem.page_index, line: wordItem.line_index});
+      }else{
+        //// Scroll on line change:
+        if (lastLine !== {page: wordItem.page_index, line: wordItem.line_index})
+          setLastPos({page: wordItem.page_index, line: wordItem.line_index});
+      }
     }
 
     // Keep player focused for shortcuts
@@ -223,8 +264,9 @@ function App() {
 
   // TEXT RENDER
   // Add highliting: Edit lines adding marks around the word to highlight
-  function makeTextRenderer(w_index) {
-    return (textItem) => {
+  function makeTextRenderer(textItem){
+      if(textItem === undefined) return;
+
       //console.debug(`page ${textItem.page._pageIndex} item: ${textItem.itemIndex}: ${textItem.str}`);
       const page_index = textItem.page._pageIndex;
       const line_index = textItem.itemIndex;
@@ -249,28 +291,34 @@ function App() {
           return true;
         });
 
-        const prevWordItem = Object.assign({}, transcriptedText[transcript_index - 1]);
         const wordItem = Object.assign({}, transcriptedText[transcript_index]);
-        const nextWordItem = transcriptedText[transcript_index + 1];
+
+        //const prevWordItem = Object.assign({}, transcriptedText[transcript_index - 1]);
+        //const nextWordItem = transcriptedText[transcript_index + 1];
 
         // If we are on a word to highlight
         // create highlight
         if (transcript_index === transcriptIndex) {
-          // check if next is within MAX_DELAY_BETWEEN_WORDS
-          if (wordItem && nextWordItem && wordItem.word_index < splitText.length - 2 && wordItem.time + playerSpeed * MAX_DELAY_BETWEEN_WORDS >= nextWordItem.time) {
-            skip = true;
-            wordItem.value += " " + nextWordItem.value;
-          }
-          // Or if the previous was
-          else if (wordItem && prevWordItem && wordItem.word_index > 0 && wordItem.time - playerSpeed * MAX_DELAY_BETWEEN_WORDS <= prevWordItem.time) {
-            wordItem.value = prevWordItem.value + " " + wordItem.value;
-            arr = arr.slice(0, -2);
-          }
-          if (wordItem.word_index === index && index === 0)
+          //// HIGHLIGHT MULTIPLE
+         // // check if next is within MAX_DELAY_BETWEEN_WORDS
+         // if (wordItem && nextWordItem && wordItem.word_index < splitText.length - 2 && wordItem.time + playerSpeed * MAX_DELAY_BETWEEN_WORDS >= nextWordItem.time) {
+         //   skip = true;
+         //   wordItem.value += " " + nextWordItem.value;
+         // }
+         // // Or if the previous was
+         // else if (wordItem && prevWordItem && wordItem.word_index > 0 && wordItem.time - playerSpeed * MAX_DELAY_BETWEEN_WORDS <= prevWordItem.time) {
+         //   wordItem.value = prevWordItem.value + " " + wordItem.value;
+         //   arr = arr.slice(0, -2);
+         // }
+          
+          
+          if (wordItem.word_index === index && index === 0){
             return [...arr, <mark key={'mark_' + index} className="wordHighlight">{wordItem.value} </mark>];
+          }
           else if (wordItem.word_index === index && index === splitText.length - 1)
             return [...arr, <mark key={'mark_' + index} className="wordHighlight"> {wordItem.value}</mark>];
           else if (wordItem.word_index === index)
+            //console.log("Rendering mark");
             return [...arr, <mark key={'mark_' + index} className="wordHighlight"> {wordItem.value} </mark>];
         }
 
@@ -282,7 +330,6 @@ function App() {
         else
           return [...arr, elm];
       }, []);
-    };
   }
 
   // Change player speed
@@ -298,21 +345,23 @@ function App() {
     document.getElementsByClassName("audio-player")[0].focus()
   }
 
+  const textRenderer = useCallback(makeTextRenderer, [transcriptIndex]);
+
   return (
     <div className="App">
       <div className="top">
         <div className="player">
-          <h4 className="titlebar">PDF Reader</h4>
+          {/* <h4 className="titlebar">PDF Reader</h4> */}
           <AudioPlayer
             className="audio-player"
             //autoPlay //Maybe you want this?
             ref={audioPlayer}
             listenInterval={LISTEN_INTERVAL}
             src={audio}
-            onPlay={onAudioUpdate}
-            onPause={onAudioUpdate}
+            //onPlay={(e) => console.log("Play") || onAudioUpdate}
+            onPause={onAudioUpdate}//(e) =>  console.log("pause") || onAudioUpdate}
             onSeeked={onAudioUpdate}
-            onEnded={onAudioUpdate}
+            onEnded={() => setTranscriptIndex(transcriptedText.length-1)}
             onListen={(e) => onAudioUpdate(e, !FORCE_ALL_WORDS_HIGHLIGHT)}
 
             // UI props: remove loop button, add speed control
@@ -341,7 +390,7 @@ function App() {
                 </button>
               </div>
             ]}
-            // Jump 1 seconds
+            // Jump PLAYER_STEP_SIZE seconds
             progressJumpSteps={{backward: 1000 * PLAYER_STEP_SIZE, forward: 1000 * PLAYER_STEP_SIZE}}
           />
         </div>
@@ -351,7 +400,6 @@ function App() {
         file={pdfFile}
         onLoadSuccess={onDocumentLoadSuccess}
         options={options}
-        onItemClick={({pageNumber}) => alert('Clicked an item from page ' + pageNumber + '!')}
       >
         {
           // Loop adding pages
@@ -361,10 +409,10 @@ function App() {
               <Page
                 key={`page_${index + 1}`}
                 pageNumber={index + 1}
-                scale={.8}
+                scale={PAGE_WIDTH}
                 width={size.x}
                 onRenderSuccess={() => setPagesRendered(pagesRendered + 1)}
-                customTextRenderer={makeTextRenderer(transcriptIndex)}
+                customTextRenderer={textRenderer}
               />
             ),
           )
